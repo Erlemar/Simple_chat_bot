@@ -29,11 +29,17 @@ This bot is hosted on t2.micro tier of Amazon EC2, which implies quite limited r
 
 ### Files
 dialogue_manager.py - generates an answer for the user's input.
+
 main_bot.py - main functionality of the bot - receiving user's input and sending the answer.
+
 utils.py - additional functions for dealing with data.
+
 settings.ini - twitter and telegram tokens, paths to files.
+
 data folder - contains embeddings and pickled models.
+
 thread_embeddings_by_tags - embeddings for stackoverflow posts.
+
 Files in these two folders are too big to be uploaded on github. Also I'm not sure I may upload them as they are a part of coursera course. If you with to make something similar - join the course, please.
 
 ## Link to the bot

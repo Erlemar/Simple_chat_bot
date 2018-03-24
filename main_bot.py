@@ -4,6 +4,7 @@ import requests
 import time
 import configparser
 import json
+import re
 
 from requests.compat import urljoin
 from dialogue_manager import DialogueManager
@@ -57,7 +58,7 @@ def is_unicode(text):
 
 def main():
     config = configparser.ConfigParser()
-    config.read('settings.ini')
+    config.read('settings_secret.ini')
 
     token = config['TELEGRAM']['TOKEN']
 
@@ -78,9 +79,11 @@ def main():
                 chat_id = update["message"]["chat"]["id"]
                 if "text" in update["message"]:
                     text = update["message"]["text"]
+                    # if text is correctly encoded in unicode
                     if is_unicode(text):
                         print("Update content: {}".format(update))
                         answer = bot.get_answer(update["message"]["text"])
+                        print('answer', answer)
                         if 'png' in answer:
                             # means the answer is weather forecast. Send text and image name separately.
                             bot.send_message(chat_id, answer.split(';')[0])
@@ -89,7 +92,18 @@ def main():
                         else:
                             bot.send_message(chat_id, bot.get_answer(update["message"]["text"]))
                     else:
-                        bot.send_message(chat_id, "Hmm, you are sending some weird characters to me...")
+                        # At first try to drop non-unicode characters. If no english words are left - send fixed answer.
+                        text = ''.join([i if ord(i) < 128 else ' ' for i in text])
+                        if re.findall('\w+', text) == []:
+                            bot.send_message(chat_id, "Hmm, you are sending some weird characters to me... I can speak only English.")
+                        else:
+                            answer = bot.get_answer(text)
+                            print('answer', answer)
+                            if 'png' in answer:
+                                # means the answer is weather forecast. Send text and image name separately.
+                                bot.send_message(chat_id, answer.split(';')[0])
+                                bot.send_message(chat_id, answer.split(';')[1])
+                        #bot.send_message(chat_id, "Hmm, you are sending some weird characters to me...")
             offset = max(offset, update['update_id'] + 1)
         time.sleep(1)
 

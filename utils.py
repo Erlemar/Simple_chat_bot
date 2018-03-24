@@ -6,7 +6,6 @@ from nltk.corpus import stopwords
 import configparser
 
 
-
 def text_prepare(text):
     """Perform tokenization and simple preprocessing."""
     replace_by_space_re = re.compile('[/(){}\[\]\|@,;]')
@@ -32,7 +31,7 @@ def load_embeddings(embeddings_path):
       embeddings_dim - dimension of the vectors.
     """
     config = configparser.ConfigParser()
-    config.read('settings.ini')
+    config.read('settings_secret.ini')
     with open(config['PATH']['WORD_EMBEDDINGS'], 'r') as f:
         embeddings = json.load(f)
     return embeddings, len(embeddings['using'])

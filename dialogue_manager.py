@@ -2,6 +2,7 @@ import os
 from sklearn.metrics.pairwise import pairwise_distances_argmin, pairwise_distances
 
 from chatterbot import ChatBot
+from chatbot import ChatBot
 from utils import *
 
 import glob
@@ -16,6 +17,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import twitter
+from nltk import word_tokenize, pos_tag, ne_chunk
+from nltk.chunk import tree2conlltags
 
 
 class ThreadRanker(object):
@@ -94,15 +97,18 @@ class DialogueManager(object):
 
     def create_chitchat_bot(self):
         """Initialize self.chitchat_bot with some conversational model."""
-        self.chitchat_bot = ChatBot('Little Bot',
-                                    trainer='chatterbot.trainers.ChatterBotCorpusTrainer')
-        self.chitchat_bot.train("chatterbot.corpus.english")
+        #self.chitchat_bot = ChatBot('Little Bot',
+        #                            trainer='chatterbot.trainers.ChatterBotCorpusTrainer')
+        #self.chitchat_bot.train("chatterbot.corpus.english")
+        self.chitchat_bot = ChatBot()
 
         return self.chitchat_bot
 
     def generate_weather_answer(self, question):
         """
         Generate weather forecast for a selected city.
+        
+        At first try to extract city from user request. If not possible, then generate usual answer.
         Connects to openweathermap and gets forecast, then generates plot of temperature
         in Celsius and Fahrenheit; also shows unique weather conditions.
         """
@@ -113,43 +119,54 @@ class DialogueManager(object):
         good_symbols_re = re.compile('[^a-zA-Z -]')
         question_cleaned = good_symbols_re.sub('', question)
 
-        city = question_cleaned.split('weather in')[1]
-        forecast = requests.get('http://api.openweathermap.org/data/2.5/forecast?q={0}&appid=f00cf7123615727d162770891d4fd225'.format(city)).json()
-        if forecast['message'] == 'city not found':
-            return "I don't know this city!"
+        # Extract entities.
+        tagged = tree2conlltags(ne_chunk(pos_tag(word_tokenize(question.title()))))
+        cities = [i[0] for i in tagged if i[1] == 'NNP']
+        city = ''
+        for c in cities:
+            data = requests.get('http://api.openweathermap.org/data/2.5/forecast?q={0}&appid=f00cf7123615727d162770891d4fd225'.format(c)).json()
+            if data['cod'] == '200':
+                city = c
+                break
+        if city == '':
+               return self.generate_usual_answer(question)
+        else:
+            forecast = requests.get('http://api.openweathermap.org/data/2.5/forecast?q={0}&appid=f00cf7123615727d162770891d4fd225'.format(city)).json()
+            if forecast['message'] == 'city not found':
+                return "I don't know this city!"
 
-        # Generate temperature and date lists for plotting
-        date_list = []
-        temp_list_c = []
-        temp_list_f = []
+            # Generate temperature and date lists for plotting
+            date_list = []
+            temp_list_c = []
+            temp_list_f = []
 
-        for reading in forecast['list']:
-            date = datetime.fromtimestamp(int(reading['dt']))
-            temperature_c = reading['main']['temp'] - 273.15
-            temperature_f = reading['main']['temp'] * 9 / 5 - 459.67
-            date_list.append(date)
-            temp_list_c.append(temperature_c)
-            temp_list_f.append(temperature_f)
+            for reading in forecast['list']:
+                date = datetime.fromtimestamp(int(reading['dt']))
+                temperature_c = reading['main']['temp'] - 273.15
+                temperature_f = reading['main']['temp'] * 9 / 5 - 459.67
+                date_list.append(date)
+                temp_list_c.append(temperature_c)
+                temp_list_f.append(temperature_f)
 
-        # make chart
-        fig, ax = plt.subplots()
-        ax.plot_date(date_list, temp_list_c, '-', label='Celsius')
-        ax.plot_date(date_list, temp_list_f, '-', label='Fahrenheit')
-        ax.grid(True)
+            # make chart
+            fig, ax = plt.subplots()
+            ax.plot_date(date_list, temp_list_c, '-', label='Celsius')
+            ax.plot_date(date_list, temp_list_f, '-', label='Fahrenheit')
+            ax.grid(True)
 
-        plt.xticks(rotation=30)
-        plt.yticks(range(int(min(temp_list_c)) - 1, int(max(temp_list_f) + 1), 5))
-        dtFmt = mdates.DateFormatter('%m/%d')
-        ax.xaxis.set_major_formatter(dtFmt)
-        plt.title('Temperature')
-        plt.legend()
-        # save image, so it can be sent to user
-        plt.savefig('plot.png')
+            plt.xticks(rotation=30)
+            plt.yticks(range(int(min(temp_list_c)) - 1, int(max(temp_list_f) + 1), 5))
+            dtFmt = mdates.DateFormatter('%m/%d')
+            ax.xaxis.set_major_formatter(dtFmt)
+            plt.title('Temperature in {0}'.format(city))
+            plt.legend()
+            # save image, so it can be sent to user
+            plt.savefig('plot.png')
 
-        # List of possible unique weather conditions
-        weather = ', '.join(list(set([i['weather'][0]['description'] for i in forecast['list']])))
+            # List of possible unique weather conditions
+            weather = ', '.join(list(set([i['weather'][0]['description'] for i in forecast['list']])))
 
-        return 'Possible weather in the next few days: {0}.;{1}'.format(weather, 'plot.png')
+            return 'Possible weather in the next few days: {0}.;{1}'.format(weather, 'plot.png')
 
     def generate_twitter_answer(self, question):
         """
@@ -162,9 +179,7 @@ class DialogueManager(object):
 
         good_symbols_re = re.compile('[^a-zA-Z0-9 _]')
         question_cleaned = good_symbols_re.sub('', question.replace('/', ' '))
-
         account_name = question_cleaned.split(' ')[-1]
-
 
         try:
             tweet_id = api.GetUserTimeline(screen_name=account_name, count=1)[0].id
@@ -187,7 +202,8 @@ class DialogueManager(object):
         # Chit-chat part:
         if intent == 'dialogue':
             # Pass question to chitchat_bot to generate a response.
-            response = self.chitchat_bot.get_response(question).text
+            #response = self.chitchat_bot.get_response(question).text
+            response = self.chitchat_bot.predict(question)
             return response
 
         # Goal-oriented part:
@@ -201,8 +217,8 @@ class DialogueManager(object):
             return self.ANSWER_TEMPLATE % (tag, thread_id)
 
     def generate_answer(self, question):
-        print(question)
-        if 'weather in' in question:
+        print('question', question)
+        if 'weather' in question.lower():
             return self.generate_weather_answer(question)
 
         elif 'tweet' in question.lower() or 'twitter' in question.lower():
@@ -213,16 +229,18 @@ class DialogueManager(object):
             return requests.get('http://numbersapi.com/{0}/{1}/date'.format(datetime.today().month, datetime.today().day)).text
 
         elif question.lower() == 'help!' or question.lower() == 'help':
-            return """ This chatbot was created based on the final project of this course:
+            return """ This chatbot was created based on the final project of this course, for the honor task:
             https://www.coursera.org/learn/language-processing/home/welcome
             Possible commands:
-            'weather in cityname' - shows weather forecast using openweathermap api;
+            sentence with word 'weather' and city name - shows weather forecast using openweathermap api;
             'tweet/twitter account_name' - shows the latest tweet by the user;
             'today!' - shows current date and random fact about it;
             Otherwise bot will either chat or try to answer a programming question.
             Programming languages for which the bot can try to give an answer: c\c++, c#, java, javascript, php, python, r, ruby, swift, vb.
             
             Code on github: https://github.com/Erlemar/Simple_chat_bot
+            Chatbot idea is taked from this paper: https://www.researchgate.net/publication/321347271_End-to-end_Adversarial_Learning_for_Generative_Conversational_Agents
+            and repo: https://github.com/oswaldoludwig/Seq2seq-Chatbot-for-Keras
             """
 
         else:

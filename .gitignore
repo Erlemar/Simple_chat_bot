@@ -5,7 +5,7 @@ __pycache__/
 
 # C extensions
 *.so
-settings.ini
+settings_secret.ini
 
 # Distribution / packaging
 .Python

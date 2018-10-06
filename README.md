@@ -1,3 +1,7 @@
+## Telegram chat-bot is stopped
+
+This bot was a project for fun, so there was quite a low number of users. Running chat-bot on Amazon instance is quite costly (~40$ per month), so I stopped it.
+
 ## Basic NLP chat-bot
 
 This chatbot was created based on the final project of this course: https://www.coursera.org/learn/language-processing/home/welcome and later updated to meet the requirements of the honor assignment.
